@@ -4,16 +4,19 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.hooks.base_hook import BaseHook
+from airflow.models import Variable
 from datetime import datetime
 from sqlalchemy import create_engine
 import requests
 import psycopg2
 import datetime as dt
 
-connection_params = BaseHook.get_connection('postgres_connection')
+db_connection_params = BaseHook.get_connection('postgres_connection')
+url_get_exchangerate = Variable.get('url_get_exchangerate_BTC_RUB')
 
-def fn_get_exchangerate(currencies_from, currencies_to):
-    url = f'https://api.exchangerate.host/convert?from={currencies_from}&to={currencies_to}'
+
+def fn_get_exchangerate():
+    url = url_get_exchangerate
     response = requests.get(url)
     data = response.json()
     return data['result']
@@ -22,7 +25,7 @@ def fn_get_exchangerate(currencies_from, currencies_to):
 def fn_load_current_exchangerate_to_db(**kwargs):
 
     try:
-        engine = create_engine(f'postgresql+psycopg2://{connection_params.login}:{connection_params.password}@{connection_params.host}/{connection_params.schema}')
+        engine = create_engine(f'postgresql+psycopg2://{db_connection_params.login}:{db_connection_params.password}@{db_connection_params.host}/{db_connection_params.schema}')
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
@@ -49,7 +52,6 @@ task_greeting = BashOperator(
 task_get_exchangerate = PythonOperator(
     task_id='get_exchangerate',
     python_callable=fn_get_exchangerate,
-    op_kwargs={'currencies_from': 'BTC', 'currencies_to': 'RUB'},
     provide_context=True,
     dag=my_dag
 )
